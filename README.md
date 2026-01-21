@@ -1,2 +1,2 @@
 # httpfromtcp
-HTTP server from scratch
+HTTP server from scratch in Go
