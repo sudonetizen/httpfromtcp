@@ -1,10 +1,12 @@
 package main
 
 import (
-	"io"
+	//"io"
 	"fmt"
 	"log"
 	"net"
+
+	"httpfromtcp/internal/request"
 )
 
 const filePath = "messages.txt"
@@ -24,50 +26,17 @@ func main() {
 		}
 		fmt.Println("accepted connection from", conn.RemoteAddr())
 
-		linesFromChan := getLinesChannel(conn)
-		for line := range  linesFromChan {
-			fmt.Printf("read: %s\n", line)
+		req, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("l.Accept got err: %v", err)
 		}
 
-		fmt.Println("connection to", conn.RemoteAddr(), "closed")
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %v\n", req.RequestLine.Method)
+		fmt.Printf("- Target: %v\n", req.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %v\n", req.RequestLine.HttpVersion)
+
 	}
 
 }
 
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	lines := make(chan string)
-	go func() {
-		defer f.Close()
-		defer close(lines)
-		
-		line := ""
-		buffer := make([]byte, 8) 
-
-		for {
-			n, err := f.Read(buffer)
-			if err == io.EOF { break }
-
-			if err != nil {
-				fmt.Printf("file.Read got err: %v\n", err.Error())	
-				break
-			}
-
-			read_bytes := string(buffer[:n])
-
-			for _, char := range read_bytes {
-				if char != '\n' {
-					line += string(char)
-				} else {
-					lines <- line
-					line = ""
-				}
-			}
-
-		}
-		
-		if line != "" { lines <- line }
-		
-	}()
-	return lines
-
-}
