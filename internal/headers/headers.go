@@ -30,6 +30,7 @@ func (h Headers) Get(key string) (string) {
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {	
 	idx := bytes.Index(data, []byte("\r\n"))
+
 	if idx == -1 {
 		return 0, false, nil
 	}
@@ -40,15 +41,18 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 	fieldLine := string(data[:idx])
 	fieldLine = strings.TrimSpace(fieldLine)
-	fieldLineParts := strings.Split(fieldLine, " ")
+	fieldLineParts := strings.SplitN(fieldLine, ":", 2)
 
 	if len(fieldLineParts) != 2 {
 		return 0, false, fmt.Errorf("invalid field line: %v\n", fieldLineParts)
 	}
 
 	hKey := fieldLineParts[0]
-	hKey = hKey[:len(hKey)-1]
-	
+
+	if strings.Contains(hKey, " ") || len(hKey) < 1 {
+		return 0, false, fmt.Errorf("invalid key: %v\n", hKey)
+	}
+
 	for _, x := range hKey {
 		if  (x >= '0' && x <= '9') || 
 			(x >= 'A' && x <= 'Z') || 
@@ -65,8 +69,9 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	hKey = strings.ToLower(hKey)
 
 	hVal := fieldLineParts[1]
+	hVal = strings.TrimSpace(hVal)
 
-	h.Set(hKey, hVal) //h[hKey] = hVal
+	h.Set(hKey, hVal) 
 
 	return idx+2, false, nil
 }

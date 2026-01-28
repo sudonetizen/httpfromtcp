@@ -5,19 +5,23 @@ import (
 	"fmt"
 	"bytes"
 	"strings"
+
+	"httpfromtcp/internal/headers"
 )
 
-const bufferSize = 8 
+const bufferSize = 8
 
 type rState int
 
 const (
 	initialized rState = iota
 	done
+	requestStateParsingHeaders
 )
 
 type Request struct {
 	RequestLine RequestLine
+	Headers headers.Headers
 	state rState
 }
 
@@ -31,7 +35,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	buffer := make([]byte, bufferSize, bufferSize)
 	readToIndex := 0
 
-	request := &Request{state: initialized}
+	request := &Request{state: initialized, Headers: headers.Headers{}}
 
 	for request.state != done {
 		if readToIndex >= len(buffer) {
@@ -42,7 +46,9 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		
 		nBytesRead, err := reader.Read(buffer[readToIndex:])
 		if err == io.EOF {
-			request.state = done
+			if request.state != done {
+				return nil, fmt.Errorf("request not done yet, state: %v, read: %v bytes, EOF\n", request.state, nBytesRead)
+			}
 			break
 		}
 		if err != nil {
@@ -54,7 +60,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		if err != nil {
 			return nil, fmt.Errorf("request.Parse got err: %v\n", err.Error())
 		}
-	
+
 		copy(buffer, buffer[nBytesParsed:])
 		readToIndex -= nBytesParsed
 
@@ -96,22 +102,45 @@ func parseRequestLine(data []byte) (int, *RequestLine, error) {
 		return 0, nil, fmt.Errorf("unsupported: %v\n", requestLineHttpVersion)	
 	}
 	
-	return len(data), &RequestLine{httpVersion, requestLineTarget, requestLineMethod}, nil
+	return idx+2, &RequestLine{httpVersion, requestLineTarget, requestLineMethod}, nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
+	tBytesParsed := 0
+	for r.state != done {
+		n, err := r.parseSingle(data[tBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+		tBytesParsed += n
+		if n == 0 {
+			break
+		}
+	}
+	return tBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
 	switch r.state {
 	case initialized:
 		n, rl, err := parseRequestLine(data)
 		if err != nil {
-			fmt.Println("parse got err:", err)
 			return 0, fmt.Errorf("parseRequestLine got err: %v\n", err.Error())
 		}
 		if n == 0 {
 			return 0, nil
 		}
 		r.RequestLine = *rl
-		r.state = done
+		r.state = requestStateParsingHeaders
+		return n, nil
+	case requestStateParsingHeaders:
+		n, dne, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, fmt.Errorf("r.Headers.Parse got err: %v\n", err.Error())
+		}
+		if  dne == true {
+			r.state = done
+		}
 		return n, nil
 	case done:
 		return 0, fmt.Errorf("error: trying to read data in a done state\n")
