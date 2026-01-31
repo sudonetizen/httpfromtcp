@@ -28,6 +28,11 @@ func (h Headers) Get(key string) (string) {
 	return v
 }
 
+func (h Headers) Okay(key string) bool {
+	_, ok := h[strings.ToLower(key)]
+	return ok
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {	
 	idx := bytes.Index(data, []byte("\r\n"))
 

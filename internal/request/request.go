@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"bytes"
 	"strings"
+	"strconv"
 
 	"httpfromtcp/internal/headers"
 )
@@ -17,11 +18,14 @@ const (
 	initialized rState = iota
 	done
 	requestStateParsingHeaders
+	requestStateParsingBody
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers headers.Headers
+	Body []byte
+	bodyLen int
 	state rState
 }
 
@@ -35,7 +39,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	buffer := make([]byte, bufferSize, bufferSize)
 	readToIndex := 0
 
-	request := &Request{state: initialized, Headers: headers.Headers{}}
+	request := &Request{state: initialized, Headers: headers.Headers{}, Body: make([]byte, 0)}
 
 	for request.state != done {
 		if readToIndex >= len(buffer) {
@@ -139,9 +143,32 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, fmt.Errorf("r.Headers.Parse got err: %v\n", err.Error())
 		}
 		if  dne == true {
-			r.state = done
+			r.state =  requestStateParsingBody
 		}
 		return n, nil
+	case requestStateParsingBody:
+		if !r.Headers.Okay("Content-Length") {
+			r.state = done
+			return len(data), nil
+		}		
+
+		contentLen, err := strconv.Atoi(r.Headers.Get("Content-Length"))
+		if err != nil {
+			return 0, fmt.Errorf("error: invalid content length: %v\n", err.Error())
+		}
+
+		r.Body = append(r.Body, data...)
+		r.bodyLen += len(data)
+
+		if r.bodyLen > contentLen {
+			return 0, fmt.Errorf("error: body len: %v > content length: %v, data: %v end\n", r.bodyLen, contentLen, string(data))
+		}
+
+		if r.bodyLen == contentLen {
+			r.state = done
+		}
+
+		return len(data), nil
 	case done:
 		return 0, fmt.Errorf("error: trying to read data in a done state\n")
 	default:
