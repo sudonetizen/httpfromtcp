@@ -1,49 +1,21 @@
 package server
 
 import (
-	"io"
 	"fmt"
 	"log"
 	"net"
-	"bytes"
 	"sync/atomic"
 
 	"httpfromtcp/internal/request"
 	"httpfromtcp/internal/response"
 )
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request) 
 
 type Server struct {
 	Listener net.Listener
 	closed atomic.Bool
 	hfunc Handler
-}
-
-type HandlerError struct {
-	StatusCode response.StatusCode
-	Message string
-}
-
-func writeHandlerError(he *HandlerError, w io.Writer) error {
-	err := response.WriteStatusLine(w, he.StatusCode)
-	if err != nil {
-		return fmt.Errorf("response.WriteStatusLine got err: %v\n", err.Error())
-	}
-
-	h := response.GetDefaultHeaders(len([]byte(he.Message)))
-
-	err = response.WriteHeaders(w, h)
-	if err != nil {
-		return fmt.Errorf("response.WriteHeaders got err: %v\n", err.Error())	
-	}
-
-	_, err = w.Write([]byte(he.Message))
-	if err != nil {
-		return fmt.Errorf("w.Write got err: %v\n", err.Error())
-	}
-
-	return nil
 }
 
 func Serve(port int, handlerFunc Handler) (*Server, error) {
@@ -83,46 +55,11 @@ func (s *Server) handle(conn net.Conn) {
 
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		err := writeHandlerError(&HandlerError{StatusCode: response.StatusBadReq, Message: err.Error()}, conn)
-		if err != nil {
-			fmt.Printf("writeHandlerError got err: %v\n", err.Error())
-			return
-		}
+		fmt.Printf("request.RequestFromReader got err: %v\n", err.Error())
 		return
 	}
 
-	b := bytes.NewBuffer([]byte{})
-
-	handlerError := s.hfunc(b, req)
-	if handlerError != nil {
-		err := writeHandlerError(handlerError, conn)
-
-		if err != nil {
-			fmt.Printf("writeHandlerError got err: %v\n", err.Error())
-			return
-		}
-
-		return
-	}
-
-	err = response.WriteStatusLine(conn, response.StatusOk)
-	if err != nil {
-		fmt.Printf("response.WriteStatusLine got err: %v\n", err.Error())
-		return
-	}
-
-	h := response.GetDefaultHeaders(len(b.Bytes()))
-
-	err = response.WriteHeaders(conn, h)
-	if err != nil {
-		fmt.Printf("response.WriteHeaders got err: %v\n", err.Error())
-		return
-	}
-
-	_, err = conn.Write(b.Bytes())
-	if err != nil {
-		fmt.Printf("b conn.Write got err: %v\n", err.Error())
-		return
-	}
+	writeStruct := &response.Writer{Writer: conn}	
+	s.hfunc(writeStruct, req)
 
 }

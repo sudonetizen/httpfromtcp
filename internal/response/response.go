@@ -15,7 +15,11 @@ const (
 	StatusSrvErr StatusCode = 500
 )
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+type Writer struct {
+	Writer io.Writer
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	statusLine := ""
 
 	switch statusCode {
@@ -29,9 +33,9 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 		statusLine = fmt.Sprintf("HTTP/1.1 %v \r\n", int(statusCode))
 	}
 
-	_, err := w.Write([]byte(statusLine))
+	_, err := w.Writer.Write([]byte(statusLine))
 	if err != nil {
-		return fmt.Errorf("w.Write got err: %v\n", err.Error())
+		return fmt.Errorf("w.Writer.Write got err: %v\n", err.Error())
 	}
 
 	return nil
@@ -46,19 +50,28 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 	return h
 }
 
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	for v, k := range headers {
-		_, err := w.Write([]byte(fmt.Sprintf("%v: %v\r\n", v, k)))
+		_, err := w.Writer.Write([]byte(fmt.Sprintf("%v: %v\r\n", v, k)))
 
 		if err != nil {
-			return fmt.Errorf("w.Write got err: %v\n", err.Error())
+			return fmt.Errorf("w.Writer.Write got err: %v\n", err.Error())
 		}
 	}
 
-	_, err := w.Write([]byte("\r\n"))
+	_, err := w.Writer.Write([]byte("\r\n"))
 	if err != nil {
-		return fmt.Errorf("w.Write got err: %v\n", err.Error())
+		return fmt.Errorf("w.Writer.Write got err: %v\n", err.Error())
 	}
 
 	return nil
+}
+
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	if err != nil {
+		return 0, fmt.Errorf("w.Writer.Write got err: %v\n", err.Error())
+	}
+
+	return n, nil
 }

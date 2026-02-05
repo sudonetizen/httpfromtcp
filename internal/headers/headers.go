@@ -13,6 +13,7 @@ func NewHeaders() Headers {
 }
 
 func (h Headers) Set(key, value string) {
+	key = strings.ToLower(key)
 	v, ok := h[key]
 	if ok {
 		h[key] = v + ", " + value
@@ -31,6 +32,10 @@ func (h Headers) Get(key string) (string) {
 func (h Headers) Okay(key string) bool {
 	_, ok := h[strings.ToLower(key)]
 	return ok
+}
+
+func (h Headers) OverWrite(key, value string) {
+	h[strings.ToLower(key)] = value
 }
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {	
