@@ -59,7 +59,7 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
-	writeStruct := &response.Writer{Writer: conn}	
+	writeStruct := response.NewWriter(conn)
 	s.hfunc(writeStruct, req)
 
 }
